@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/Code/Planwise -maxdepth 2 -name next.config* -o -name tailwind.config* -o -name eslint*)"
+    ]
+  }
+}

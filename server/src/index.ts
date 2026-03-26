@@ -112,6 +112,142 @@ app.get("/auth/users", async (_req, res) => {
   return res.json({ users });
 });
 
+app.get("/projects", requireSession, async (req: AuthenticatedRequest, res) => {
+  const user = await authPrisma.user.findUnique({
+    where: { id: req.userId },
+    select: {
+      activeProjects: {
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  return res.json({ projects: user.activeProjects });
+});
+
+app.post("/projects", requireSession, async (req: AuthenticatedRequest, res) => {
+  const rawName = typeof req.body?.name === "string" ? req.body.name : "";
+  const name = rawName.trim();
+
+  if (!name) {
+    return res.status(400).json({ error: "Project name is required" });
+  }
+
+  const project = await authPrisma.project.create({
+    data: {
+      name,
+      ownerId: req.userId,
+      members: {
+        connect: [{ id: req.userId }],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return res.status(201).json({ project });
+});
+
+app.patch("/projects/:id", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+  const rawName = typeof req.body?.name === "string" ? req.body.name : "";
+  const name = rawName.trim();
+
+  if (!name) {
+    return res.status(400).json({ error: "Project name is required" });
+  }
+
+  const project = await authPrisma.project.findFirst({
+    where: {
+      id: projectId,
+      members: { some: { id: req.userId } },
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const updated = await authPrisma.project.update({
+    where: { id: projectId },
+    data: { name },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return res.json({ project: updated });
+});
+
+app.delete("/projects/:id", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+
+  const project = await authPrisma.project.findFirst({
+    where: { id: projectId, ownerId: req.userId },
+  });
+
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  await authPrisma.project.delete({
+    where: { id: projectId },
+  });
+
+  return res.status(204).send();
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

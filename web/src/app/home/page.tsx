@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { getAuthSession } from "@/auth";
+import ProjectsDashboard from "@/components/projects-dashboard";
 import SignOutButton from "@/components/sign-out-button";
 
 export default async function HomePage() {
@@ -12,8 +13,8 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-300 bg-slate-50">
+    <main className="h-screen overflow-hidden bg-slate-100">
+      <header className="border-b border-slate-300 bg-white">
         <div className="relative flex h-16 items-center justify-between px-4">
           <div className="flex h-full items-center">
             <Link href="/home" className="flex h-full items-center" aria-label="Go to home">
@@ -35,6 +36,7 @@ export default async function HomePage() {
           </div>
         </div>
       </header>
+      <ProjectsDashboard />
     </main>
   );
 }
