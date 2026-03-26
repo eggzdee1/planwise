@@ -1,10 +1,15 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import { getAuthSession } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import SignOutButton from "@/components/sign-out-button";
+import ProjectTabs from "@/components/project-tabs";
 
 type ProjectPageProps = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
@@ -14,15 +19,45 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     redirect("/");
   }
 
-  const { id } = params;
+  const { id } = await params;
+
+  const project = await prisma.project.findFirst({
+    where: {
+      id,
+      members: { some: { id: session.user.id } },
+    },
+    select: { name: true },
+  });
+
+  if (!project) {
+    redirect("/home");
+  }
 
   return (
-    <main className="min-h-screen bg-slate-100">
-      <div className="mx-auto max-w-5xl px-4 py-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Project workspace</h1>
-        <p className="mt-2 text-sm text-slate-500">Project ID: {id}</p>
-      </div>
+    <main className="h-screen overflow-hidden bg-slate-100">
+      <header className="border-b border-slate-300 bg-white">
+        <div className="relative flex h-16 items-center justify-between px-4">
+          <div className="flex h-full items-center">
+            <Link href="/home" className="flex h-full items-center" aria-label="Go to home">
+              <Image
+                src="/logo.png"
+                alt="Planwise logo"
+                width={40}
+                height={40}
+                priority
+                className="block"
+              />
+            </Link>
+          </div>
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-base font-semibold text-slate-900 sm:text-lg">
+            {project.name}
+          </h1>
+          <div>
+            <SignOutButton />
+          </div>
+        </div>
+      </header>
+      <ProjectTabs />
     </main>
   );
 }
-

@@ -22,6 +22,12 @@ export const authOptions: NextAuthOptions = {
       clientSecret: requireEnv("GOOGLE_CLIENT_SECRET"),
     }),
   ],
+  callbacks: {
+    session({ session, user }) {
+      session.user.id = user.id;
+      return session;
+    },
+  },
   pages: {
     signIn: "/",
   },

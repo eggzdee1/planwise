@@ -40,7 +40,7 @@ export default function ProjectActionsMenu({
           e.stopPropagation();
           onToggleMenu();
         }}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none text-slate-500 hover:bg-slate-200"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none text-slate-500 hover:bg-slate-300"
         aria-label={`More actions for ${project.name}`}
         aria-expanded={isOpen}
       >
@@ -73,7 +73,7 @@ export default function ProjectActionsMenu({
                 <button
                   type="button"
                   onClick={() => onClose()}
-                  className="rounded px-2 py-1 text-sm text-slate-900 hover:bg-slate-200"
+                  className="rounded px-2 py-1 text-sm text-slate-900 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
@@ -81,7 +81,7 @@ export default function ProjectActionsMenu({
                   type="button"
                   onClick={onSubmitRename}
                   disabled={isUpdating || !editingName.trim()}
-                  className="rounded border border-slate-300 px-2 py-1 text-sm font-medium text-slate-900 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded border border-slate-300 px-2 py-1 text-sm font-medium text-slate-900 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   OK
                 </button>

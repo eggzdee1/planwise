@@ -33,7 +33,7 @@ export default function CreateProjectSidebar({
         <button
           type="submit"
           disabled={isCreating || projectName.trim().length === 0}
-          className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-200 disabled:text-slate-400"
+          className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-200 disabled:text-slate-400"
         >
           {isCreating ? "Creating..." : "Create"}
         </button>
