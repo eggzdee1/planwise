@@ -34,7 +34,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-slate-100">
+    <main className="h-screen overflow-hidden bg-slate-200">
       <header className="border-b border-slate-300 bg-white">
         <div className="relative flex h-16 items-center justify-between px-4">
           <div className="flex h-full items-center">
@@ -57,7 +57,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           </div>
         </div>
       </header>
-      <ProjectTabs />
+      <ProjectTabs projectId={id} currentUser={{ id: session.user.id, name: session.user.name ?? null }} />
     </main>
   );
 }
