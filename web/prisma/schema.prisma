@@ -18,6 +18,7 @@ model User {
   ownedProjects  Project[] @relation("ProjectOwner")
   activeProjects Project[] @relation("ProjectMembers")
   assignedTasks  Task[]    @relation("TaskAssignees")
+  updateEntries   ProjectUpdateEntry[]
 }
 
 model Account {
@@ -61,6 +62,7 @@ model Project {
   owner     User     @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members   User[]   @relation("ProjectMembers")
   tasks     Task[]
+  updates   ProjectUpdate[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -87,4 +89,31 @@ model Task {
   updatedAt   DateTime   @updatedAt
 
   @@index([projectId])
+}
+
+model ProjectUpdate {
+  id        String               @id @default(cuid())
+  projectId String
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entries   ProjectUpdateEntry[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectUpdateEntry {
+  id        String        @id @default(cuid())
+  updateId  String
+  update    ProjectUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    User          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  did       String        @default("")
+  willDo    String        @default("")
+  blockers  String        @default("")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([updateId, memberId])
+  @@index([memberId])
 }

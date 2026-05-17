@@ -254,10 +254,61 @@ const TASK_INCLUDE = {
   assignees: { select: { id: true, name: true, email: true } },
 } as const;
 
+const UPDATE_INCLUDE = {
+  entries: {
+    select: {
+      memberId: true,
+      did: true,
+      willDo: true,
+      blockers: true,
+    },
+  },
+} as const;
+
 const isMember = async (projectId: string | string[] | undefined, userId: string) =>
   authPrisma.project.findFirst({
     where: { id: projectId, members: { some: { id: userId } } },
   });
+
+type ProjectUpdateInput = {
+  memberId: string;
+  did: string;
+  willDo: string;
+  blockers: string;
+};
+
+const parseProjectUpdateEntries = (body: unknown): ProjectUpdateInput[] => {
+  const entries = Array.isArray((body as { entries?: unknown })?.entries)
+    ? (body as { entries: unknown[] }).entries
+    : [];
+
+  return entries
+    .map((entry) => {
+      const value = entry as Record<string, unknown>;
+      return {
+        memberId: typeof value.memberId === "string" ? value.memberId : "",
+        did: typeof value.did === "string" ? value.did : "",
+        willDo: typeof value.willDo === "string" ? value.willDo : "",
+        blockers: typeof value.blockers === "string" ? value.blockers : "",
+      };
+    })
+    .filter((entry) => entry.memberId);
+};
+
+const keepMemberEntries = (
+  entries: ProjectUpdateInput[],
+  memberIds: Set<string>,
+): ProjectUpdateInput[] => {
+  const seen = new Set<string>();
+
+  return entries.filter((entry) => {
+    if (!memberIds.has(entry.memberId) || seen.has(entry.memberId)) {
+      return false;
+    }
+    seen.add(entry.memberId);
+    return true;
+  });
+};
 
 // ── Task routes ───────────────────────────────────────────────────────────────
 
@@ -282,6 +333,98 @@ app.get("/projects/:id/members", requireSession, async (req: AuthenticatedReques
     : project.members;
 
   return res.json({ members });
+});
+
+app.get("/projects/:id/updates", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+
+  if (!(await isMember(projectId, req.userId!))) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const updates = await authPrisma.projectUpdate.findMany({
+    where: { projectId },
+    include: UPDATE_INCLUDE,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return res.json({ updates });
+});
+
+app.post("/projects/:id/updates", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+
+  const project = await authPrisma.project.findFirst({
+    where: { id: projectId, members: { some: { id: req.userId } } },
+    select: { members: { select: { id: true } } },
+  });
+
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const projectMembers = project.members as { id: string }[];
+  const memberIds = new Set<string>(projectMembers.map((member) => member.id));
+  const entries = keepMemberEntries(parseProjectUpdateEntries(req.body), memberIds);
+
+  const update = await authPrisma.projectUpdate.create({
+    data: {
+      projectId,
+      entries: {
+        create: entries,
+      },
+    },
+    include: UPDATE_INCLUDE,
+  });
+
+  return res.status(201).json({ update });
+});
+
+app.patch("/projects/:id/updates/:updateId", requireSession, async (req: AuthenticatedRequest, res) => {
+  const { id: projectId, updateId } = req.params;
+
+  const project = await authPrisma.project.findFirst({
+    where: { id: projectId, members: { some: { id: req.userId } } },
+    select: { members: { select: { id: true } } },
+  });
+
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const existingUpdate = await authPrisma.projectUpdate.findFirst({
+    where: { id: updateId, projectId },
+    select: { id: true },
+  });
+
+  if (!existingUpdate) {
+    return res.status(404).json({ error: "Update not found" });
+  }
+
+  const projectMembers = project.members as { id: string }[];
+  const memberIds = new Set<string>(projectMembers.map((member) => member.id));
+  const entries = keepMemberEntries(parseProjectUpdateEntries(req.body), memberIds);
+
+  const update = await prisma.$transaction(async (tx) => {
+    const txAny = tx as any;
+
+    await txAny.projectUpdateEntry.deleteMany({ where: { updateId } });
+    await txAny.projectUpdate.update({
+      where: { id: updateId },
+      data: {
+        entries: {
+          create: entries,
+        },
+      },
+    });
+
+    return txAny.projectUpdate.findUnique({
+      where: { id: updateId },
+      include: UPDATE_INCLUDE,
+    });
+  });
+
+  return res.json({ update });
 });
 
 app.get("/projects/:id/tasks", requireSession, async (req: AuthenticatedRequest, res) => {
