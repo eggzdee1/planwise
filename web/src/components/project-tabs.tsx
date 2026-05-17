@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TbListDetails, TbMessageDots, TbCornerUpLeft, TbSettings } from "react-icons/tb";
 import type { IconType } from "react-icons";
 import BacklogTab from "./backlog-tab";
+import RetrospectiveTab from "./retrospective-tab";
 import UpdatesTab from "./updates-tab";
 
 type Tab = "backlog" | "updates" | "retrospective" | "settings";
@@ -68,7 +69,10 @@ export default function ProjectTabs({ projectId, currentUser }: Props) {
         <div className={activeTab === "updates" ? "block h-full" : "hidden"}>
           <UpdatesTab projectId={projectId} />
         </div>
-        {(activeTab === "retrospective" || activeTab === "settings") && (
+        <div className={activeTab === "retrospective" ? "block h-full" : "hidden"}>
+          <RetrospectiveTab projectId={projectId} />
+        </div>
+        {activeTab === "settings" && (
           <p className="text-slate-500">{TABS.find((t) => t.id === activeTab)?.label}</p>
         )}
       </div>

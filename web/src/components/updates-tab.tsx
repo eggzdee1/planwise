@@ -57,6 +57,14 @@ export default function UpdatesTab({ projectId }: Props) {
 
   const selectedUpdate = updates.find((update) => update.id === selectedUpdateId);
   const isNewUpdate = selectedUpdateId === NEW_UPDATE_ID;
+  const hasNewUpdateText = members.some((member) => {
+    const entry = form[member.id];
+    return Boolean(
+      entry?.did.trim() ||
+      entry?.willDo.trim() ||
+      entry?.blockers.trim(),
+    );
+  });
 
   const showToast = useCallback((message: string) => {
     if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
@@ -150,6 +158,8 @@ export default function UpdatesTab({ projectId }: Props) {
   };
 
   const handleAddUpdate = async () => {
+    if (!hasNewUpdateText) return;
+
     setSaving(true);
     try {
       const res = await fetch(`${apiBaseUrl}/projects/${projectId}/updates`, {
@@ -215,7 +225,7 @@ export default function UpdatesTab({ projectId }: Props) {
 
         {toast && (
           <div
-            className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm transition-opacity duration-500 ${
+            className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 shadow-sm transition-opacity duration-500 ${
               toast.visible ? "opacity-100" : "opacity-0"
             }`}
           >
@@ -227,7 +237,7 @@ export default function UpdatesTab({ projectId }: Props) {
           <button
             type="button"
             onClick={handleAddUpdate}
-            disabled={saving}
+            disabled={saving || !hasNewUpdateText}
             className="rounded-lg px-4 py-2 text-sm text-slate-900 bg-white border border-slate-300 transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:border-slate-300 disabled:text-slate-500"
           >
             Add Update

@@ -63,6 +63,7 @@ model Project {
   members   User[]   @relation("ProjectMembers")
   tasks     Task[]
   updates   ProjectUpdate[]
+  retrospective ProjectRetrospective?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -116,4 +117,15 @@ model ProjectUpdateEntry {
 
   @@unique([updateId, memberId])
   @@index([memberId])
+}
+
+model ProjectRetrospective {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  start     String   @default("")
+  stop      String   @default("")
+  continue  String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -277,6 +277,22 @@ type ProjectUpdateInput = {
   blockers: string;
 };
 
+type ProjectRetrospectiveInput = {
+  start: string;
+  stop: string;
+  continue: string;
+};
+
+const parseProjectRetrospective = (body: unknown): ProjectRetrospectiveInput => {
+  const value = body as Record<string, unknown>;
+
+  return {
+    start: typeof value.start === "string" ? value.start : "",
+    stop: typeof value.stop === "string" ? value.stop : "",
+    continue: typeof value.continue === "string" ? value.continue : "",
+  };
+};
+
 const parseProjectUpdateEntries = (body: unknown): ProjectUpdateInput[] => {
   const entries = Array.isArray((body as { entries?: unknown })?.entries)
     ? (body as { entries: unknown[] }).entries
@@ -425,6 +441,47 @@ app.patch("/projects/:id/updates/:updateId", requireSession, async (req: Authent
   });
 
   return res.json({ update });
+});
+
+app.get("/projects/:id/retrospective", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+
+  if (!(await isMember(projectId, req.userId!))) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const retrospective = await authPrisma.projectRetrospective.findUnique({
+    where: { projectId },
+  });
+
+  return res.json({
+    retrospective: retrospective ?? {
+      id: null,
+      projectId,
+      start: "",
+      stop: "",
+      continue: "",
+      createdAt: null,
+      updatedAt: null,
+    },
+  });
+});
+
+app.patch("/projects/:id/retrospective", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+
+  if (!(await isMember(projectId, req.userId!))) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const data = parseProjectRetrospective(req.body);
+  const retrospective = await authPrisma.projectRetrospective.upsert({
+    where: { projectId },
+    create: { projectId, ...data },
+    update: data,
+  });
+
+  return res.json({ retrospective });
 });
 
 app.get("/projects/:id/tasks", requireSession, async (req: AuthenticatedRequest, res) => {
