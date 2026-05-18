@@ -24,7 +24,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const project = await prisma.project.findFirst({
     where: {
       id,
-      members: { some: { id: session.user.id } },
+      memberships: { some: { userId: session.user.id } },
     },
     select: { name: true },
   });

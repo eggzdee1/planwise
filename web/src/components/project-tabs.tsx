@@ -1,23 +1,25 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TbListDetails, TbMessageDots, TbCornerUpLeft, TbSettings } from "react-icons/tb";
+import { TbListDetails, TbMessageDots, TbCornerUpLeft } from "react-icons/tb";
+import { FiUsers } from "react-icons/fi";
 import type { IconType } from "react-icons";
 import BacklogTab from "./backlog-tab";
 import RetrospectiveTab from "./retrospective-tab";
+import TeamTab from "./team-tab";
 import UpdatesTab from "./updates-tab";
 
-type Tab = "backlog" | "updates" | "retrospective" | "settings";
+type Tab = "backlog" | "updates" | "retrospective" | "team";
 
 const TABS: { id: Tab; label: string; Icon: IconType }[] = [
   { id: "backlog",       label: "Backlog",       Icon: TbListDetails },
   { id: "updates",      label: "Updates",      Icon: TbMessageDots },
   { id: "retrospective", label: "Retrospective", Icon: TbCornerUpLeft },
-  { id: "settings",     label: "Settings",     Icon: TbSettings },
+  { id: "team",         label: "Team",         Icon: FiUsers },
 ];
 
 const isTab = (value: string | null): value is Tab =>
-  value === "backlog" || value === "updates" || value === "retrospective" || value === "settings";
+  value === "backlog" || value === "updates" || value === "retrospective" || value === "team";
 
 type Props = {
   projectId: string;
@@ -72,8 +74,8 @@ export default function ProjectTabs({ projectId, currentUser }: Props) {
         <div className={activeTab === "retrospective" ? "block h-full" : "hidden"}>
           <RetrospectiveTab projectId={projectId} />
         </div>
-        {activeTab === "settings" && (
-          <p className="text-slate-500">{TABS.find((t) => t.id === activeTab)?.label}</p>
+        {activeTab === "team" && (
+          <TeamTab projectId={projectId} currentUser={currentUser} />
         )}
       </div>
     </div>

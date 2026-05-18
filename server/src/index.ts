@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import crypto from "crypto";
 import { PrismaClient } from "@prisma/client";
 
 const app = express();
@@ -20,6 +21,33 @@ app.get("/", (_req, res) => {
 
 type AuthenticatedRequest = express.Request & {
   userId?: string;
+};
+
+const PROJECT_SELECT = {
+  id: true,
+  name: true,
+  createdAt: true,
+  owner: {
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      email: true,
+    },
+  },
+} as const;
+
+const normalizeJoinCode = (code: string) => code.trim().toUpperCase().replace(/\s+/g, "");
+
+const hashJoinCode = (code: string) =>
+  crypto.createHash("sha256").update(normalizeJoinCode(code)).digest("hex");
+
+const generateJoinCode = () => {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const makePart = () =>
+    Array.from({ length: 4 }, () => alphabet[crypto.randomInt(alphabet.length)]).join("");
+
+  return `PLAN-${makePart()}-${makePart()}`;
 };
 
 const getCookieValue = (rawCookie: string | undefined, key: string): string | null => {
@@ -113,33 +141,20 @@ app.get("/auth/users", async (_req, res) => {
 });
 
 app.get("/projects", requireSession, async (req: AuthenticatedRequest, res) => {
-  const user = await authPrisma.user.findUnique({
-    where: { id: req.userId },
+  const memberships = await authPrisma.projectMember.findMany({
+    where: { userId: req.userId },
     select: {
-      activeProjects: {
-        orderBy: { name: "asc" },
-        select: {
-          id: true,
-          name: true,
-          createdAt: true,
-          owner: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-              email: true,
-            },
-          },
-        },
+      project: {
+        select: PROJECT_SELECT,
       },
     },
   });
 
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
-  }
+  const projects = memberships
+    .map((membership: { project: unknown }) => membership.project)
+    .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
-  return res.json({ projects: user.activeProjects });
+  return res.json({ projects });
 });
 
 app.post("/projects", requireSession, async (req: AuthenticatedRequest, res) => {
@@ -154,23 +169,58 @@ app.post("/projects", requireSession, async (req: AuthenticatedRequest, res) => 
     data: {
       name,
       ownerId: req.userId,
-      members: {
-        connect: [{ id: req.userId }],
+      memberships: {
+        create: { user: { connect: { id: req.userId } } },
       },
     },
+    select: PROJECT_SELECT,
+  });
+
+  return res.status(201).json({ project });
+});
+
+app.post("/projects/join", requireSession, async (req: AuthenticatedRequest, res) => {
+  const rawCode = typeof req.body?.code === "string" ? req.body.code : "";
+  const code = normalizeJoinCode(rawCode);
+
+  if (!code) {
+    return res.status(400).json({ error: "Join code is required" });
+  }
+
+  const invite = await authPrisma.projectInvite.findUnique({
+    where: { codeHash: hashJoinCode(code) },
     select: {
-      id: true,
-      name: true,
-      createdAt: true,
-      owner: {
+      expiresAt: true,
+      revokedAt: true,
+      project: {
         select: {
           id: true,
-          name: true,
-          image: true,
-          email: true,
         },
       },
     },
+  });
+
+  if (!invite || invite.revokedAt || invite.expiresAt <= new Date()) {
+    return res.status(404).json({ error: "Join code is invalid or expired" });
+  }
+
+  await authPrisma.projectMember.upsert({
+    where: {
+      projectId_userId: {
+        projectId: invite.project.id,
+        userId: req.userId,
+      },
+    },
+    create: {
+      projectId: invite.project.id,
+      userId: req.userId,
+    },
+    update: {},
+  });
+
+  const project = await authPrisma.project.findUnique({
+    where: { id: invite.project.id },
+    select: PROJECT_SELECT,
   });
 
   return res.status(201).json({ project });
@@ -188,21 +238,9 @@ app.patch("/projects/:id", requireSession, async (req: AuthenticatedRequest, res
   const project = await authPrisma.project.findFirst({
     where: {
       id: projectId,
-      members: { some: { id: req.userId } },
+      ownerId: req.userId,
     },
-    select: {
-      id: true,
-      name: true,
-      createdAt: true,
-      owner: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          email: true,
-        },
-      },
-    },
+    select: PROJECT_SELECT,
   });
 
   if (!project) {
@@ -212,19 +250,7 @@ app.patch("/projects/:id", requireSession, async (req: AuthenticatedRequest, res
   const updated = await authPrisma.project.update({
     where: { id: projectId },
     data: { name },
-    select: {
-      id: true,
-      name: true,
-      createdAt: true,
-      owner: {
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          email: true,
-        },
-      },
-    },
+    select: PROJECT_SELECT,
   });
 
   return res.json({ project: updated });
@@ -248,6 +274,43 @@ app.delete("/projects/:id", requireSession, async (req: AuthenticatedRequest, re
   return res.status(204).send();
 });
 
+app.post("/projects/:id/invites", requireSession, async (req: AuthenticatedRequest, res) => {
+  const projectId = req.params.id;
+  const project = await authPrisma.project.findFirst({
+    where: { id: projectId, ownerId: req.userId },
+    select: { id: true },
+  });
+
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const code = generateJoinCode();
+
+  await prisma.$transaction([
+    authPrisma.projectInvite.updateMany({
+      where: {
+        projectId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { revokedAt: now },
+    }),
+    authPrisma.projectInvite.create({
+      data: {
+        codeHash: hashJoinCode(code),
+        projectId,
+        createdById: req.userId,
+        expiresAt,
+      },
+    }),
+  ]);
+
+  return res.status(201).json({ code, expiresAt });
+});
+
 // ── Task helpers ──────────────────────────────────────────────────────────────
 
 const TASK_INCLUDE = {
@@ -266,9 +329,9 @@ const UPDATE_INCLUDE = {
 } as const;
 
 const isMember = async (projectId: string | string[] | undefined, userId: string) =>
-  authPrisma.project.findFirst({
-    where: { id: projectId, members: { some: { id: userId } } },
-  });
+  typeof projectId === "string" ? authPrisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+  }) : null;
 
 type ProjectUpdateInput = {
   memberId: string;
@@ -333,22 +396,67 @@ app.get("/projects/:id/members", requireSession, async (req: AuthenticatedReques
   const search = typeof req.query.search === "string" ? req.query.search.toLowerCase() : "";
 
   const project = await authPrisma.project.findFirst({
-    where: { id: projectId, members: { some: { id: req.userId } } },
-    select: { members: { select: { id: true, name: true, email: true } } },
+    where: { id: projectId, memberships: { some: { userId: req.userId } } },
+    select: {
+      ownerId: true,
+      memberships: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
   });
 
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
   }
 
+  const projectMembers = project.memberships.map((membership: { user: unknown }) => membership.user);
   const members = search
-    ? project.members.filter((m: { name: string | null; email: string | null }) =>
+    ? projectMembers.filter((m: { name: string | null; email: string | null }) =>
         m.name?.toLowerCase().startsWith(search) ||
         m.email?.toLowerCase().startsWith(search),
       )
-    : project.members;
+    : projectMembers;
 
-  return res.json({ members });
+  return res.json({ members, ownerId: project.ownerId });
+});
+
+app.delete("/projects/:id/members/:memberId", requireSession, async (req: AuthenticatedRequest, res) => {
+  const { id: projectId, memberId } = req.params;
+
+  const project = await authPrisma.project.findFirst({
+    where: { id: projectId, ownerId: req.userId },
+    select: { ownerId: true },
+  });
+
+  if (!project) {
+    return res.status(404).json({ error: "Project not found" });
+  }
+
+  if (memberId === project.ownerId) {
+    return res.status(400).json({ error: "Project owner cannot be removed" });
+  }
+
+  const tasks = await authPrisma.task.findMany({
+    where: { projectId, assignees: { some: { id: memberId } } },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    authPrisma.projectMember.deleteMany({
+      where: { projectId, userId: memberId },
+    }),
+    ...tasks.map((task: { id: string }) =>
+      authPrisma.task.update({
+        where: { id: task.id },
+        data: { assignees: { disconnect: [{ id: memberId }] } },
+      }),
+    ),
+  ]);
+
+  return res.status(204).send();
 });
 
 app.get("/projects/:id/updates", requireSession, async (req: AuthenticatedRequest, res) => {
@@ -371,16 +479,16 @@ app.post("/projects/:id/updates", requireSession, async (req: AuthenticatedReque
   const projectId = req.params.id;
 
   const project = await authPrisma.project.findFirst({
-    where: { id: projectId, members: { some: { id: req.userId } } },
-    select: { members: { select: { id: true } } },
+    where: { id: projectId, memberships: { some: { userId: req.userId } } },
+    select: { memberships: { select: { userId: true } } },
   });
 
   if (!project) {
     return res.status(404).json({ error: "Project not found" });
   }
 
-  const projectMembers = project.members as { id: string }[];
-  const memberIds = new Set<string>(projectMembers.map((member) => member.id));
+  const projectMembers = project.memberships as { userId: string }[];
+  const memberIds = new Set<string>(projectMembers.map((member) => member.userId));
   const entries = keepMemberEntries(parseProjectUpdateEntries(req.body), memberIds);
 
   const update = await authPrisma.projectUpdate.create({
@@ -400,8 +508,8 @@ app.patch("/projects/:id/updates/:updateId", requireSession, async (req: Authent
   const { id: projectId, updateId } = req.params;
 
   const project = await authPrisma.project.findFirst({
-    where: { id: projectId, members: { some: { id: req.userId } } },
-    select: { members: { select: { id: true } } },
+    where: { id: projectId, memberships: { some: { userId: req.userId } } },
+    select: { memberships: { select: { userId: true } } },
   });
 
   if (!project) {
@@ -417,8 +525,8 @@ app.patch("/projects/:id/updates/:updateId", requireSession, async (req: Authent
     return res.status(404).json({ error: "Update not found" });
   }
 
-  const projectMembers = project.members as { id: string }[];
-  const memberIds = new Set<string>(projectMembers.map((member) => member.id));
+  const projectMembers = project.memberships as { userId: string }[];
+  const memberIds = new Set<string>(projectMembers.map((member) => member.userId));
   const entries = keepMemberEntries(parseProjectUpdateEntries(req.body), memberIds);
 
   const update = await prisma.$transaction(async (tx) => {

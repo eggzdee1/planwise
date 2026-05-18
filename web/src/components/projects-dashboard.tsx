@@ -12,8 +12,11 @@ export default function ProjectsDashboard() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectName, setProjectName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -45,17 +48,25 @@ export default function ProjectsDashboard() {
         }
 
         setErrorMessage(null);
-        const response = await fetch(`${apiBaseUrl}/projects`, {
-          method: "GET",
-          credentials: "include",
-        });
+        const [projectsResponse, meResponse] = await Promise.all([
+          fetch(`${apiBaseUrl}/projects`, {
+            method: "GET",
+            credentials: "include",
+          }),
+          fetch(`${apiBaseUrl}/auth/me`, {
+            method: "GET",
+            credentials: "include",
+          }),
+        ]);
 
-        if (!response.ok) {
+        if (!projectsResponse.ok || !meResponse.ok) {
           throw new Error("Failed to load projects");
         }
 
-        const payload = (await response.json()) as { projects: Project[] };
+        const payload = (await projectsResponse.json()) as { projects: Project[] };
+        const mePayload = (await meResponse.json()) as { user: { id: string } };
         setProjects(payload.projects);
+        setCurrentUserId(mePayload.user.id);
       } catch {
         setErrorMessage("Could not load projects right now.");
       } finally {
@@ -94,6 +105,43 @@ export default function ProjectsDashboard() {
       setErrorMessage("Could not create project right now.");
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const onJoinProject = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const code = joinCode.trim();
+    if (!code) return;
+
+    try {
+      if (!apiBaseUrl) throw new Error("Missing NEXT_PUBLIC_API_URL");
+
+      setIsJoining(true);
+      setErrorMessage(null);
+
+      const response = await fetch(`${apiBaseUrl}/projects/join`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!response.ok) throw new Error("Failed to join project");
+
+      const payload = (await response.json()) as { project: Project };
+      setProjects((current) => {
+        if (current.some((project) => project.id === payload.project.id)) {
+          return current;
+        }
+
+        return [payload.project, ...current];
+      });
+      setJoinCode("");
+    } catch {
+      setErrorMessage("Could not join project with that code.");
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -194,6 +242,7 @@ export default function ProjectsDashboard() {
                   <ProjectRow
                     key={project.id}
                     project={project}
+                    currentUserId={currentUserId}
                     menuRef={menuRef}
                     isMenuOpen={openMenuProjectId === project.id}
                     isEditing={editingProjectId === project.id}
@@ -224,10 +273,14 @@ export default function ProjectsDashboard() {
 
       <CreateProjectSidebar
         projectName={projectName}
+        joinCode={joinCode}
         isCreating={isCreating}
+        isJoining={isJoining}
         errorMessage={errorMessage}
         onChange={setProjectName}
+        onJoinCodeChange={setJoinCode}
         onSubmit={onCreateProject}
+        onJoinSubmit={onJoinProject}
       />
     </section>
   );

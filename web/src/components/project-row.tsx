@@ -6,6 +6,7 @@ import ProjectActionsMenu from "./project-actions-menu";
 
 type Props = {
   project: Project;
+  currentUserId: string | null;
   menuRef: RefObject<HTMLDivElement | null>;
   isMenuOpen: boolean;
   isEditing: boolean;
@@ -23,6 +24,7 @@ type Props = {
 
 export default function ProjectRow({
   project,
+  currentUserId,
   menuRef,
   isMenuOpen,
   isEditing,
@@ -37,6 +39,8 @@ export default function ProjectRow({
   onClose,
   onDelete,
 }: Props) {
+  const isOwner = currentUserId === project.owner.id;
+
   return (
     <tr
       className="border-b border-slate-300 text-sm text-slate-900 hover:bg-slate-200 cursor-pointer"
@@ -49,22 +53,24 @@ export default function ProjectRow({
         </div>
       </td>
       <td className="relative px-5 py-3 text-right">
-        <div ref={isMenuOpen ? menuRef : undefined} className="relative inline-block">
-          <ProjectActionsMenu
-            project={project}
-            isOpen={isMenuOpen}
-            isEditing={isEditing}
-            editingName={editingName}
-            isUpdating={isUpdating}
-            onToggleMenu={onToggleMenu}
-            onEditingNameChange={onEditingNameChange}
-            onStartRename={onStartRename}
-            onSubmitRename={onSubmitRename}
-            onCancelRename={onCancelRename}
-            onClose={onClose}
-            onDelete={onDelete}
-          />
-        </div>
+        {isOwner ? (
+          <div ref={isMenuOpen ? menuRef : undefined} className="relative inline-block">
+            <ProjectActionsMenu
+              project={project}
+              isOpen={isMenuOpen}
+              isEditing={isEditing}
+              editingName={editingName}
+              isUpdating={isUpdating}
+              onToggleMenu={onToggleMenu}
+              onEditingNameChange={onEditingNameChange}
+              onStartRename={onStartRename}
+              onSubmitRename={onSubmitRename}
+              onCancelRename={onCancelRename}
+              onClose={onClose}
+              onDelete={onDelete}
+            />
+          </div>
+        ) : null}
       </td>
     </tr>
   );

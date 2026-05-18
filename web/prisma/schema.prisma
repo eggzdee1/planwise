@@ -15,10 +15,11 @@ model User {
   image          String?
   accounts       Account[]
   sessions       Session[]
-  ownedProjects  Project[] @relation("ProjectOwner")
-  activeProjects Project[] @relation("ProjectMembers")
-  assignedTasks  Task[]    @relation("TaskAssignees")
-  updateEntries   ProjectUpdateEntry[]
+  ownedProjects      Project[] @relation("ProjectOwner")
+  projectMemberships ProjectMember[]
+  assignedTasks      Task[]    @relation("TaskAssignees")
+  updateEntries      ProjectUpdateEntry[]
+  createdInvites     ProjectInvite[]
 }
 
 model Account {
@@ -60,7 +61,8 @@ model Project {
   name      String
   ownerId   String
   owner     User     @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members   User[]   @relation("ProjectMembers")
+  memberships ProjectMember[]
+  invites   ProjectInvite[]
   tasks     Task[]
   updates   ProjectUpdate[]
   retrospective ProjectRetrospective?
@@ -68,6 +70,32 @@ model Project {
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ProjectInvite {
+  id          String    @id @default(cuid())
+  codeHash    String    @unique
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([projectId])
 }
 
 enum TaskStatus {
