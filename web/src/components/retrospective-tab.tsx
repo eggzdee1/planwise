@@ -190,7 +190,7 @@ export default function RetrospectiveTab({ projectId }: Props) {
               onChange={(e) => {
                 handleFieldChange(column.field, e.target.value);
               }}
-              className={`block min-h-56 w-full resize-none overflow-hidden bg-white px-4 py-3 font-medium text-sm outline-none transition-colors placeholder:text-slate-400 text-slate-900`}
+              className={`block min-h-20 w-full resize-none overflow-hidden bg-white px-4 py-3 font-medium text-sm outline-none transition-colors placeholder:text-slate-400 text-slate-900`}
               aria-label={column.label}
             />
           </div>
